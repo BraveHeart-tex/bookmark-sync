@@ -3,6 +3,8 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { OAuth2Tokens } from 'arctic';
 import { google } from '@/lib/server/auth/google';
 import type { GoogleAuthClaims } from '@/lib/server/auth/types';
+import { useConvexClient } from 'convex-svelte';
+import { api } from '@/convex/_generated/api';
 
 export async function GET(event: RequestEvent): Promise<Response> {
   const code = event.url.searchParams.get('code');
@@ -42,8 +44,11 @@ export async function GET(event: RequestEvent): Promise<Response> {
 
   const googleUserId = claims.sub;
   const username = claims.name;
+  const client = useConvexClient();
 
-  // const existingUser = await getUserFromGoogleId(googleUserId);
+  const existingUser = await client.query(api.user.getUserFromGoogleId, {
+    googleId: googleUserId
+  });
 
   // if (existingUser !== null) {
   // 	const sessionToken = generateSessionToken();

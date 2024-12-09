@@ -1,19 +1,37 @@
-import type { SessionValidationResult } from '@/lib/server/auth/types';
 import {
   encodeBase32LowerCaseNoPadding,
   encodeHexLowerCase
 } from '@oslojs/encoding';
 import { sha256 } from '@oslojs/crypto/sha2';
-import {
-  createUserSession,
-  deleteUserSession,
-  getSessionWithUserInformation,
-  updateSessionExpiresAt
-} from '@/convex/auth/session';
-import type { MutationCtx } from '@/convex/_generated/server';
-import type { DataModel, Id } from '@/convex/_generated/dataModel';
-import type { GenericMutationCtx, WithoutSystemFields } from 'convex/server';
+import type { Id } from '@/convex/_generated/dataModel';
+import type { WithoutSystemFields } from 'convex/server';
 import type { Session } from '@/convex/types';
+import type { RequestEvent } from '@sveltejs/kit';
+import { SESSION_COOKIE_NAME } from '@/constants';
+import { useConvexClient } from 'convex-svelte';
+import { api } from '@/convex/_generated/api';
+
+export function setSessionTokenCookie(
+  event: RequestEvent,
+  token: string,
+  expiresAt: Date
+): void {
+  event.cookies.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    expires: expiresAt,
+    path: '/'
+  });
+}
+
+export function deleteSessionTokenCookie(event: RequestEvent): void {
+  event.cookies.set(SESSION_COOKIE_NAME, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/'
+  });
+}
 
 export const generateSessionToken = (): string => {
   const bytes = new Uint8Array(20);
@@ -23,11 +41,9 @@ export const generateSessionToken = (): string => {
 };
 
 export const createSession = async ({
-  ctx,
   token,
   userId
 }: {
-  ctx: MutationCtx;
   token: string;
   userId: Id<'user'>;
 }): Promise<WithoutSystemFields<Session>> => {
@@ -38,60 +54,11 @@ export const createSession = async ({
     expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 30
   };
 
-  await createUserSession(ctx, session);
+  const client = useConvexClient();
+
+  await client.mutation(api.session.createUserSession, {
+    ...session
+  });
 
   return session;
-};
-
-export const validateSessionToken = async (
-  ctx: GenericMutationCtx<DataModel>,
-  token: string
-): Promise<SessionValidationResult> => {
-  const sessionId = encodeHexLowerCase(sha256(new TextEncoder().encode(token)));
-  const { user, session: sessionRow } = await getSessionWithUserInformation(
-    ctx,
-    {
-      sessionId
-    }
-  );
-
-  if (!user || !sessionRow) {
-    return {
-      session: null,
-      user: null
-    };
-  }
-
-  const session = {
-    id: sessionRow.id,
-    userId: sessionRow.userId,
-    expiresAt: sessionRow.expiresAt
-  };
-
-  if (Date.now() >= session.expiresAt) {
-    await deleteUserSession(ctx, {
-      id: sessionRow._id
-    });
-    return {
-      session: null,
-      user: null
-    };
-  }
-
-  if (Date.now() >= session.expiresAt - 1000 * 60 * 60 * 24 * 15) {
-    session.expiresAt = Date.now() + 1000 * 60 * 60 * 24 * 30;
-    await updateSessionExpiresAt(ctx, {
-      id: sessionRow._id,
-      expiresAt: session.expiresAt
-    });
-  }
-
-  return {
-    session: sessionRow,
-    user
-  };
-};
-
-export const invalidateSession = (sessionId: string): Promise<void> => {
-  // TODO
 };

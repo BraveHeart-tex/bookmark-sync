@@ -50,7 +50,12 @@
     "vitest": "^2.0.4"
   },
   "dependencies": {
+    "@oslojs/crypto": "^1.0.1",
+    "@oslojs/encoding": "^1.1.0",
     "@tailwindcss/typography": "^0.5.15",
-    "bits-ui": "^0.21.16"
+    "arctic": "^2.3.0",
+    "bits-ui": "^0.21.16",
+    "convex": "^1.17.3",
+    "convex-svelte": "^0.0.10"
   }
 }
